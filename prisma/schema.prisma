@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL") 
+}
+
+enum Role {
+  ROOT
+  MANAGER
+}
+
+enum TerminalStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum RequestStatus {
+  PENDING
+  REJECTED
+  APPROVED
+}
+
+model Admin {
+  id String @id @default(uuid())
+  email String @unique
+  name String
+  password String
+  role Role @default(MANAGER)
+
+  tokenV Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admins")
+}
+
+model Shop {
+  id String @id @default(uuid())
+  name String?
+  requesites String
+  address String
+  login String
+  password String
+
+  tokenV Int @default(0)
+
+  ownerId String
+  owner ShopOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  terminals Terminal[]
+  requests TerminalRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shops")
+}
+
+model ShopOwner{
+  id String @id @default(uuid())
+
+  name String 
+  contacts String
+
+  shops Shop[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shop_owners")
+}
+
+model Terminal {
+  id String @id @default(uuid())
+  macAddress String @unique
+  status  TerminalStatus @default(INACTIVE)
+
+  shopId String
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("terminals")
+}
+
+model TerminalRequest {
+  id String @id @default(uuid())
+  
+  macAddress String
+  status RequestStatus @default(PENDING)
+  comment String?
+
+  shopId String
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
