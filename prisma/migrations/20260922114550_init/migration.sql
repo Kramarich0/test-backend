@@ -25,7 +25,7 @@ CREATE TABLE "admins" (
 CREATE TABLE "shops" (
     "id" TEXT NOT NULL,
     "name" TEXT,
-    "requesites" TEXT NOT NULL,
+    "requisites" TEXT NOT NULL,
     "address" TEXT NOT NULL,
     "login" TEXT NOT NULL,
     "password" TEXT NOT NULL,
@@ -78,6 +78,9 @@ CREATE UNIQUE INDEX "admins_email_key" ON "admins"("email");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "terminals_macAddress_key" ON "terminals"("macAddress");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "shops_login_key" ON "shops"("login");
 
 -- AddForeignKey
 ALTER TABLE "shops" ADD CONSTRAINT "shops_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "shop_owners"("id") ON DELETE CASCADE ON UPDATE CASCADE;

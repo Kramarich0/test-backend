@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client"
-  output   = "../generated/prisma"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
@@ -42,9 +42,9 @@ model Admin {
 model Shop {
   id String @id @default(uuid())
   name String?
-  requesites String
+  requisites String
   address String
-  login String
+  login String @unique
   password String
 
   tokenV Int @default(0)
@@ -57,6 +57,8 @@ model Shop {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 
   @@map("shops")
 }
@@ -86,6 +88,8 @@ model Terminal {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([shopId]) 
+
   @@map("terminals")
 }
 
@@ -101,4 +105,8 @@ model TerminalRequest {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([shopId])
+
+  @@map("terminal_requests")
 }
