@@ -45,5 +45,6 @@
     "**/node_modules": true
   },
 
-  "workbench.editor.labelFormat": "short"
+  "workbench.editor.labelFormat": "short",
+  "prisma.pinToPrisma6": true
 }

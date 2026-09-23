@@ -1,0 +1,30 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: check-lockfile
+      glob: '{package.json,pnpm-lock.yaml}'
+      run: pnpm install --frozen-lockfile
+
+    - name: oxlint
+      glob: '**/*.{js,jsx,ts,tsx}'
+      run: pnpm exec oxlint -c .oxlintrc.json {staged_files}
+      stage_fixed: true
+
+    - name: arch-check
+      run: pnpm arch:check
+
+    - name: spell-check
+      glob: '**/*.{js,jsx,ts,tsx,md,mdx,json,prisma}'
+      run: pnpm exec cspell lint --no-summary --no-progress --no-must-find-files {staged_files}
+
+    - name: secretlint
+      run: pnpm exec secretlint {staged_files}
+
+pre-push:
+  parallel: true
+  jobs:
+    - name: type-check
+      run: pnpm type-check
+
+    - name: test
+      run: pnpm test
