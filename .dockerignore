@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.log
+coverage
+.vscode
+.idea
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+reports
+src/generated

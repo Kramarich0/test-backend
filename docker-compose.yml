@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: kkm_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-kkm_db}
+    ports:
+      - '${DB_PORT:-5433}:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d kkm_db']
+      interval: 3s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kkm_backend
+    restart: always
+    ports:
+      - '3000:3000'
+    environment:
+      DATABASE_URL: 'postgresql://postgres:postgres@postgres:5432/kkm_db?schema=public'
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-key-for-test-task-12345}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super-secret-jwt-refresh-key-for-test-task-12345}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
