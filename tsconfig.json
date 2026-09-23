@@ -5,11 +5,15 @@
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
-    "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleDetection": "force",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "resolveJsonModule": true,
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
@@ -23,8 +27,7 @@
     "types": ["vitest/globals", "node"],
     "alwaysStrict": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@generated/*": ["./generated/*"]
+      "#*": ["./src/*"]
     }
   }
 }
