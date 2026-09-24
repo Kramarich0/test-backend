@@ -92,6 +92,21 @@ async function main() {
                     status: 'PENDING',
                     comment: 'Request for terminal at Entrance No.2',
                   },
+                  {
+                    macAddress: 'AA:BB:CC:DD:EE:02',
+                    status: 'PENDING',
+                    comment: 'Request for terminal at Entrance No.3 (To test REJECTED)',
+                  },
+                  {
+                    macAddress: 'AA:BB:CC:DD:EE:03',
+                    status: 'REJECTED',
+                    comment: 'Request for terminal at Entrance No.4 (To test reply on REJECTED)',
+                  },
+                  {
+                    macAddress: 'AA:BB:CC:DD:EE:04',
+                    status: 'APPROVED',
+                    comment: 'Request for terminal at Entrance No.5 (To test reply on APPROVED)',
+                  },
                 ],
               },
             },
