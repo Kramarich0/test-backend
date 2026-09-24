@@ -14,7 +14,10 @@ import {
 import { ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HeartbeatDto } from './dto/heartbeat.dto.js';
 import { TerminalDetailsResponseDto } from '#common/dto/response-details.dto.js';
-import { TerminalListItemResponseDto, TerminalResponseDto } from '#common/dto/terminal-response.dto.js';
+import {
+  TerminalListItemResponseDto,
+  TerminalResponseDto,
+} from '#common/dto/terminal-response.dto.js';
 import { UpdateTerminalDto } from './dto/update-terminal.dto.js';
 import { TerminalsService } from './terminals.service.js';
 
