@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsString } from 'class-validator';
 
 export class AddCommentDto {
   @ApiProperty({
@@ -7,5 +8,7 @@ export class AddCommentDto {
     description: 'Internal operator comment',
   })
   @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsNotEmpty()
   comment!: string;
 }

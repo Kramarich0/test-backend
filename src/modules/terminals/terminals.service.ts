@@ -1,3 +1,4 @@
+import { normalizeMacAddress } from '#common/utils/mac.util.js';
 import { DBService } from '#db/db.service.js';
 import { Prisma } from '#generated/prisma/client.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
@@ -9,7 +10,18 @@ export class TerminalsService {
   constructor(private readonly dbService: DBService) {}
 
   async getTerminals() {
-    return await this.dbService.terminal.findMany();
+    return await this.dbService.terminal.findMany({
+      include: {
+        shop: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async getTerminalDetails(id: string) {
@@ -42,9 +54,10 @@ export class TerminalsService {
   }
 
   async heartbeat(dto: HeartbeatDto) {
+    const normalizedMac = normalizeMacAddress(dto.macAddress);
     try {
       return await this.dbService.terminal.update({
-        where: { macAddress: dto.macAddress },
+        where: { macAddress: normalizedMac },
         data: { status: 'ACTIVE' },
       });
     } catch (error) {
