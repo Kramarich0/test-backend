@@ -23,6 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       where: {
         id: payload.sub,
       },
+      omit: { tokenV: false },
     });
 
     if (!admin || admin.tokenV !== payload.tokenV) {

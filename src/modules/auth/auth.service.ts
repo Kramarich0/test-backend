@@ -1,8 +1,8 @@
 import { verifyPassword } from '#common/utils/hash.util.js';
 import type { EnvironmentVariables } from '#config/env.validation.js';
-import { ConfigService } from '@nestjs/config';
 import { DBService } from '#db/db.service.js';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { LoginDto } from './dto/login.dto.js';
 import type { JwtPayload, SafeAdmin } from './types/auth.types.js';
@@ -60,12 +60,20 @@ export class AuthService {
     const updatedAdmin = await this.dbService.admin.update({
       where: { id: admin.id },
       data: { tokenV: { increment: 1 } },
+      omit: { tokenV: false },
     });
 
     const tokens = await this.generateTokens(updatedAdmin);
     return {
-      admin: updatedAdmin,
-      tokens,
+      ...tokens,
+      admin: {
+        id: updatedAdmin.id,
+        email: updatedAdmin.email,
+        name: updatedAdmin.name,
+        role: updatedAdmin.role,
+        createdAt: updatedAdmin.createdAt,
+        updatedAt: updatedAdmin.updatedAt,
+      },
     };
   }
 
@@ -79,26 +87,39 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
+    let payload: JwtPayload;
+
     try {
-      const payload: JwtPayload = await this.jwtService.verifyAsync(refreshToken, {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
-
-      const admin = await this.dbService.admin.findUnique({
-        where: {
-          id: payload.sub,
-        },
-      });
-
-      if (!admin || admin.tokenV !== payload.tokenV) {
-        throw new UnauthorizedException('Session expired');
-      }
-
-      const tokens = await this.generateTokens(admin);
-
-      return { tokens };
     } catch {
       throw new UnauthorizedException('Refresh token invalid or expired');
     }
+
+    const rotated = await this.dbService.admin.updateMany({
+      where: {
+        id: payload.sub,
+        tokenV: payload.tokenV,
+      },
+      data: { tokenV: { increment: 1 } },
+    });
+
+    if (rotated.count === 0) {
+      throw new UnauthorizedException('Session expired');
+    }
+
+    const admin = await this.dbService.admin.findUnique({
+      where: {
+        id: payload.sub,
+      },
+      omit: { tokenV: false },
+    });
+
+    if (!admin) {
+      throw new UnauthorizedException('Session expired');
+    }
+
+    return await this.generateTokens(admin);
   }
 }
