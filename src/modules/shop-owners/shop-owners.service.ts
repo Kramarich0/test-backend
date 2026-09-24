@@ -1,6 +1,6 @@
 import { DBService } from '#db/db.service.js';
 import { Prisma } from '#generated/prisma/client.js';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { CreateOwnerDto } from './dto/create-owner.dto.js';
 import type { UpdateOwnerDto } from './dto/update-owner.dto.js';
 
@@ -15,6 +15,7 @@ export class ShopOwnersService {
           select: { shops: true },
         },
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -43,13 +44,24 @@ export class ShopOwnersService {
   }
 
   async updateOwner(id: string, dto: UpdateOwnerDto) {
+    if (!dto.name && !dto.contacts) {
+      throw new BadRequestException('Provide at least one field to update');
+    }
+
+    const data: Prisma.ShopOwnerUpdateInput = {};
+
+    if (dto.name) {
+      data.name = dto.name;
+    }
+
+    if (dto.contacts) {
+      data.contacts = dto.contacts;
+    }
+
     try {
       return await this.dbService.shopOwner.update({
         where: { id },
-        data: {
-          name: dto.name,
-          contacts: dto.contacts,
-        },
+        data,
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {

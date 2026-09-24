@@ -1,14 +1,7 @@
 import { Auth } from '#common/decorators/roles.decorator.js';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-} from '@nestjs/common';
-import {
+  ApiBadRequestResponse,
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiNotFoundResponse,
@@ -17,6 +10,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateShopDto } from './dto/create-shop.dto.js';
+import { ShopDetailsResponseDto } from '#common/dto/response-details.dto.js';
+import { ShopListItemResponseDto, ShopResponseDto } from '#common/dto/shop-response.dto.js';
 import { UpdateCredentialsDto } from './dto/update-credentials.dto.js';
 import { ShopsService } from './shops.service.js';
 
@@ -31,7 +26,10 @@ export class ShopsController {
     summary: 'List all shops',
     description: 'Returns all retail shops with owner information and terminal counts.',
   })
-  @ApiOkResponse({ description: 'List of shops returned successfully.' })
+  @ApiOkResponse({
+    description: 'List of shops returned successfully.',
+    type: [ShopListItemResponseDto],
+  })
   async getShops() {
     return await this.shopsService.getShops();
   }
@@ -42,7 +40,10 @@ export class ShopsController {
     description:
       'Returns full shop information including owner, active terminals, and connection requests.',
   })
-  @ApiOkResponse({ description: 'Shop details returned successfully.' })
+  @ApiOkResponse({
+    description: 'Shop details returned successfully.',
+    type: ShopDetailsResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Shop not found.' })
   async getShopDetails(@Param('id', ParseUUIDPipe) id: string) {
     return await this.shopsService.getShopDetails(id);
@@ -53,7 +54,10 @@ export class ShopsController {
     summary: 'Create retail shop',
     description: 'Registers a new shop linked to an existing owner.',
   })
-  @ApiCreatedResponse({ description: 'Shop created.' })
+  @ApiCreatedResponse({
+    description: 'Shop created.',
+    type: ShopResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Owner not found.' })
   @ApiConflictResponse({ description: 'Shop login already in use.' })
   async createShop(@Body() dto: CreateShopDto) {
@@ -66,10 +70,17 @@ export class ShopsController {
     description:
       'Updates POS terminal login/password and increments token version to disconnect active devices.',
   })
-  @ApiOkResponse({ description: 'Credentials updated and sessions terminated.' })
+  @ApiOkResponse({
+    description: 'Credentials updated and sessions terminated.',
+    type: ShopResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Shop not found.' })
+  @ApiBadRequestResponse({ description: 'Provide a new login or password.' })
   @ApiConflictResponse({ description: 'New login is already taken.' })
-  async updateCredentials(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCredentialsDto) {
+  async updateCredentials(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCredentialsDto,
+  ) {
     return await this.shopsService.updateCredentials(id, dto);
   }
 }

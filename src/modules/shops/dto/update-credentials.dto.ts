@@ -1,5 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsStrongPassword, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateCredentialsDto {
   @ApiPropertyOptional({
@@ -7,7 +8,9 @@ export class UpdateCredentialsDto {
     description: 'New unique login',
   })
   @IsOptional()
+  @IsNotEmpty()
   @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   login?: string;
 
   @ApiPropertyOptional({
@@ -17,9 +20,6 @@ export class UpdateCredentialsDto {
   @IsOptional()
   @IsString()
   @MaxLength(64)
-  @IsStrongPassword(
-    { minLength: 6, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 },
-    { message: 'New shop password must contain uppercase, lowercase, numbers, and symbols' },
-  )
+  @MinLength(6)
   password?: string;
 }

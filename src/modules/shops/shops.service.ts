@@ -1,5 +1,6 @@
 import { hashPassword } from '#common/utils/hash.util.js';
 import { DBService } from '#db/db.service.js';
+import { Prisma } from '#generated/prisma/client.js';
 import {
   BadRequestException,
   ConflictException,
@@ -23,6 +24,7 @@ export class ShopsService {
           select: { terminals: true, requests: true },
         },
       },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -44,62 +46,38 @@ export class ShopsService {
   }
 
   async createShop(dto: CreateShopDto) {
-    const owner = await this.dbService.shopOwner.findUnique({
-      where: { id: dto.ownerId },
-    });
-    if (!owner) {
-      throw new NotFoundException('The specified shop owner was not found');
-    }
-
-    const existingShop = await this.dbService.shop.findUnique({
-      where: { login: dto.login },
-    });
-    if (existingShop) {
-      throw new ConflictException('A shop with this login already exists');
-    }
-
     const passwordHash = await hashPassword(dto.password);
 
-    return await this.dbService.shop.create({
-      data: {
-        name: dto.name,
-        requisites: dto.requisites,
-        address: dto.address,
-        login: dto.login,
-        password: passwordHash,
-        ownerId: dto.ownerId,
-      },
-    });
+    try {
+      return await this.dbService.shop.create({
+        data: {
+          name: dto.name,
+          requisites: dto.requisites,
+          address: dto.address,
+          login: dto.login,
+          password: passwordHash,
+          ownerId: dto.ownerId,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new ConflictException('A shop with this login already exists');
+        }
+        if (error.code === 'P2003') {
+          throw new NotFoundException('The specified shop owner was not found');
+        }
+      }
+      throw error;
+    }
   }
 
   async updateCredentials(shopId: string, dto: UpdateCredentialsDto) {
-    const shop = await this.dbService.shop.findUnique({
-      where: { id: shopId },
-      select: { login: true },
-    });
-
-    if (!shop) {
-      throw new NotFoundException('Shop not found');
-    }
-
     if (!dto.login && !dto.password) {
       throw new BadRequestException('Provide a new login or password');
     }
 
-    if (dto.login && dto.login !== shop.login) {
-      const existing = await this.dbService.shop.findUnique({
-        where: { login: dto.login },
-      });
-      if (existing) {
-        throw new ConflictException('A shop with this login already exists');
-      }
-    }
-
-    const dataToUpdate: {
-      login?: string;
-      password?: string;
-      tokenV: { increment: number };
-    } = {
+    const dataToUpdate: Prisma.ShopUpdateInput = {
       tokenV: { increment: 1 },
     };
 
@@ -111,9 +89,21 @@ export class ShopsService {
       dataToUpdate.password = await hashPassword(dto.password);
     }
 
-    return await this.dbService.shop.update({
-      where: { id: shopId },
-      data: dataToUpdate,
-    });
+    try {
+      return await this.dbService.shop.update({
+        where: { id: shopId },
+        data: dataToUpdate,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new ConflictException('A shop with this login already exists');
+        }
+        if (error.code === 'P2025') {
+          throw new NotFoundException('Shop not found');
+        }
+      }
+      throw error;
+    }
   }
 }

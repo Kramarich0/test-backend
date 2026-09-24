@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateOwnerDto {
@@ -7,6 +8,7 @@ export class CreateOwnerDto {
     description: 'Legal name or individual entrepreneur',
   })
   @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty()
   name!: string;
 
@@ -15,6 +17,7 @@ export class CreateOwnerDto {
     description: 'Phone and email contacts',
   })
   @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty()
   contacts!: string;
 }

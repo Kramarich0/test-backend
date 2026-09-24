@@ -8,6 +8,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CreateOwnerDto } from './dto/create-owner.dto.js';
+import { ShopOwnerDetailsResponseDto } from '#common/dto/response-details.dto.js';
+import {
+  ShopOwnerListItemResponseDto,
+  ShopOwnerResponseDto,
+} from '#common/dto/shop-owner-response.dto.js';
 import { UpdateOwnerDto } from './dto/update-owner.dto.js';
 import { ShopOwnersService } from './shop-owners.service.js';
 
@@ -22,7 +27,10 @@ export class ShopOwnersController {
     summary: 'List all shop owners',
     description: 'Returns all registered shop owners along with their shop counts.',
   })
-  @ApiOkResponse({ description: 'List of shop owners returned successfully.' })
+  @ApiOkResponse({
+    description: 'List of shop owners returned successfully.',
+    type: [ShopOwnerListItemResponseDto],
+  })
   async getOwners() {
     return await this.shopOwnersService.getOwners();
   }
@@ -32,7 +40,10 @@ export class ShopOwnersController {
     summary: 'Get shop owner details',
     description: 'Returns complete shop owner profile including associated retail shops.',
   })
-  @ApiOkResponse({ description: 'Shop owner details returned successfully.' })
+  @ApiOkResponse({
+    description: 'Shop owner details returned successfully.',
+    type: ShopOwnerDetailsResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Shop owner not found.' })
   async getOwnerDetails(@Param('id', ParseUUIDPipe) id: string) {
     return await this.shopOwnersService.getOwnerDetails(id);
@@ -43,7 +54,10 @@ export class ShopOwnersController {
     summary: 'Create shop owner',
     description: 'Registers a new individual entrepreneur or legal entity.',
   })
-  @ApiCreatedResponse({ description: 'Shop owner registered successfully.' })
+  @ApiCreatedResponse({
+    description: 'Shop owner registered successfully.',
+    type: ShopOwnerResponseDto,
+  })
   async createOwner(@Body() dto: CreateOwnerDto) {
     return await this.shopOwnersService.createOwner(dto);
   }
@@ -53,7 +67,10 @@ export class ShopOwnersController {
     summary: 'Update shop owner',
     description: 'Updates name or contacts for a shop owner.',
   })
-  @ApiOkResponse({ description: 'Shop owner updated successfully.' })
+  @ApiOkResponse({
+    description: 'Shop owner updated successfully.',
+    type: ShopOwnerResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Shop owner not found.' })
   async updateOwner(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateOwnerDto) {
     return await this.shopOwnersService.updateOwner(id, dto);
@@ -64,7 +81,10 @@ export class ShopOwnersController {
     summary: 'Delete shop owner',
     description: 'Removes shop owner and cascades to owned shops and terminals.',
   })
-  @ApiOkResponse({ description: 'Shop owner deleted successfully.' })
+  @ApiOkResponse({
+    description: 'Shop owner deleted successfully.',
+    type: ShopOwnerResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Shop owner not found.' })
   async deleteOwner(@Param('id', ParseUUIDPipe) id: string) {
     return await this.shopOwnersService.deleteOwner(id);

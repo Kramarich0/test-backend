@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsStrongPassword, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateShopDto {
   @ApiPropertyOptional({
@@ -8,6 +16,7 @@ export class CreateShopDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   name?: string;
 
   @ApiProperty({
@@ -16,6 +25,7 @@ export class CreateShopDto {
   })
   @IsString()
   @IsNotEmpty()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   requisites!: string;
 
   @ApiProperty({
@@ -24,6 +34,7 @@ export class CreateShopDto {
   })
   @IsString()
   @IsNotEmpty()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   address!: string;
 
   @ApiProperty({
@@ -32,26 +43,22 @@ export class CreateShopDto {
   })
   @IsString()
   @IsNotEmpty()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   login!: string;
 
   @ApiProperty({
     example: 'ShopSecret123!',
-    description:
-      'POS authentication password (min 6 chars, uppercase, lowercase, number, symbol, max 64)',
+    description: 'POS authentication password (min 6 chars, max 64)',
   })
   @IsString()
   @MaxLength(64)
-  @IsStrongPassword(
-    { minLength: 6, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 1 },
-    { message: 'Shop password must contain uppercase, lowercase, numbers, and symbols' },
-  )
+  @MinLength(6)
   password!: string;
 
   @ApiProperty({
     example: 'f3b07e8a-357c-4ece-9a32-c307eb805f20',
     description: 'UUID of the registered shop owner',
   })
-  @IsString()
-  @IsNotEmpty()
+  @IsUUID()
   ownerId!: string;
 }
