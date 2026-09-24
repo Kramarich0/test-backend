@@ -765,8 +765,11 @@ pnpm run lint
 # Архитектурный анализ зависимостей и циклов (Dependency-Cruiser)
 pnpm run arch:check
 
-# Запуск тестов (Vitest)
+# Запуск юнит-тестов (Vitest, *.spec.ts)
 pnpm run test
+
+# Запуск e2e-тестов (56 сценариев по всем эндпоинтам, нужен postgres на :5433)
+pnpm run test:e2e
 ```
 
 ---

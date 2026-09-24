@@ -26,7 +26,7 @@
     "prepare": "lefthook install || true",
     "secretlint": "secretlint \"**/*\"",
     "spellcheck": "cspell \"**/*\" --no-progress --show-suggestions",
-    "test": "vitest run --config ./vitest.config.e2e.ts",
+    "test": "vitest run --config ./vitest.config.ts",
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
