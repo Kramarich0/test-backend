@@ -236,14 +236,14 @@ describe('Central Office API (E2E Complete)', () => {
         .expect(403);
     });
 
-    it('POST /admins - should return 400 when password is weak', async () => {
+    it('POST /admins - should return 400 when password is empty', async () => {
       await request(app.getHttpServer())
         .post('/admins')
         .set('Authorization', `Bearer ${rootAccessToken}`)
         .send({
-          email: 'weak.manager@kkm.local',
-          name: 'Weak Pass',
-          password: '123',
+          email: 'empty.password.manager@kkm.local',
+          name: 'Empty Pass',
+          password: '',
         })
         .expect(400);
     });
@@ -314,11 +314,11 @@ describe('Central Office API (E2E Complete)', () => {
         .expect(403);
     });
 
-    it('PATCH /admins/:id/password - should return 400 when new password is weak', async () => {
+    it('PATCH /admins/:id/password - should return 400 when new password exceeds 64 chars', async () => {
       await request(app.getHttpServer())
         .patch(`/admins/${createdManagerId}/password`)
         .set('Authorization', `Bearer ${rootAccessToken}`)
-        .send({ newPassword: 'weak' })
+        .send({ newPassword: 'a'.repeat(65) })
         .expect(400);
     });
 
@@ -796,11 +796,11 @@ describe('Central Office API (E2E Complete)', () => {
   });
 
   describe('Profile & Cleanup', () => {
-    it('PATCH /profile/password - should return 400 on weak password and 200 on update', async () => {
+    it('PATCH /profile/password - should return 400 on too-long password and 200 on update', async () => {
       await request(app.getHttpServer())
         .patch('/profile/password')
         .set('Authorization', `Bearer ${managerAccessToken}`)
-        .send({ newPassword: '123' })
+        .send({ newPassword: 'a'.repeat(65) })
         .expect(400);
 
       await request(app.getHttpServer())
