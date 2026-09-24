@@ -1,11 +1,9 @@
-import { DBModule } from '#db/db.module.js';
 import { Module } from '@nestjs/common';
+import { AdminsModule } from '../admins/admins.module.js';
 import { ProfileController } from './profile.controller.js';
-import { ProfileService } from './profile.service.js';
 
 @Module({
-  imports: [DBModule],
-  providers: [ProfileService],
+  imports: [AdminsModule],
   controllers: [ProfileController],
 })
 export class ProfileModule {}

@@ -1,14 +1,5 @@
 import { Auth } from '#common/decorators/roles.decorator.js';
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -19,31 +10,39 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminsService } from './admins.service.js';
-import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { AdminProfileResponseDto } from '#common/dto/admin-profile-response.dto.js';
+import { ChangePasswordDto } from '#common/dto/change-password.dto.js';
 import { CreateManagerDto } from './dto/create-manager.dto.js';
 
 @ApiTags('Admins')
-@Auth('ROOT')
 @Controller('admins')
 export class AdminsController {
   constructor(private readonly adminService: AdminsService) {}
 
   @Get()
+  @Auth()
   @ApiOperation({
-    summary: 'List all administrators (Root only)',
+    summary: 'List all administrators',
     description: 'Retrieves a list of all administrators registered in Central Office.',
   })
-  @ApiOkResponse({ description: 'List of administrators returned successfully.' })
+  @ApiOkResponse({
+    description: 'List of administrators returned successfully.',
+    type: [AdminProfileResponseDto],
+  })
   async getAdmins() {
     return await this.adminService.listAdmins();
   }
 
   @Post()
+  @Auth('ROOT')
   @ApiOperation({
     summary: 'Create manager (Root only)',
     description: 'Creates a new administrator strictly with the MANAGER role.',
   })
-  @ApiCreatedResponse({ description: 'Manager created successfully.' })
+  @ApiCreatedResponse({
+    description: 'Manager created successfully.',
+    type: AdminProfileResponseDto,
+  })
   @ApiConflictResponse({
     description: 'Administrator with this email already exists.',
   })
@@ -52,25 +51,30 @@ export class AdminsController {
   }
 
   @Patch(':id/password')
+  @Auth('ROOT')
   @ApiOperation({
     summary: 'Change administrator password (Root only)',
     description: 'Updates administrator password and terminates their active session.',
   })
-  @ApiOkResponse({ description: 'Password changed successfully.' })
+  @ApiOkResponse({
+    description: 'Password changed successfully.',
+    type: AdminProfileResponseDto,
+  })
   @ApiNotFoundResponse({ description: 'Administrator not found.' })
-  async changePassword(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ChangePasswordDto,
-  ) {
+  async changePassword(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ChangePasswordDto) {
     return await this.adminService.changePassword(id, dto);
   }
 
   @Delete(':id')
+  @Auth('ROOT')
   @ApiOperation({
     summary: 'Delete administrator (Root only)',
     description: 'Deletes manager account. Prevents deletion of the ROOT administrator.',
   })
-  @ApiOkResponse({ description: 'Administrator deleted successfully.' })
+  @ApiOkResponse({
+    description: 'Administrator deleted successfully.',
+    type: AdminProfileResponseDto,
+  })
   @ApiBadRequestResponse({ description: 'Cannot delete the ROOT administrator.' })
   @ApiNotFoundResponse({ description: 'Administrator not found.' })
   async deleteAdmin(@Param('id', ParseUUIDPipe) id: string) {
