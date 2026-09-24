@@ -176,7 +176,11 @@ const config: IConfiguration = {
       to: {},
     },
     {
-      comment: 'VSA (test-backend): no imports between NestJS modules.',
+      comment:
+        'VSA (test-backend): no deep imports between NestJS modules. Canonical cross-module links allowed: ' +
+        'module registration (imports: [XModule]) and injecting an exported service class (constructor DI). ' +
+        'See https://docs.nestjs.com/modules - any module that imports another module has access to its exported providers. ' +
+        'Reaching into another module\'s internals (DTOs, controllers, other files) is forbidden.',
       from: {
         path: '^src/modules/([^/]+)/',
         pathNot: ['[.](?:spec|e2e-spec|test)[.](?:ts|tsx)$'],
@@ -185,7 +189,11 @@ const config: IConfiguration = {
       severity: 'error',
       to: {
         path: '^src/modules/[^/]+/',
-        pathNot: '^src/modules/$1/',
+        pathNot: [
+          '^src/modules/$1/',
+          '[.]module[.]ts$',
+          '[.]service[.]ts$',
+        ],
       },
     },
     {
