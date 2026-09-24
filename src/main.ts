@@ -9,13 +9,15 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
+  app.enableShutdownHooks();
+
   app.enableCors();
 
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
     }),
   );
 
@@ -37,7 +39,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = configService.getOrThrow<number>('PORT');
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.info(`Server is running: http://localhost:${port}`);
   console.info(`Swagger: http://localhost:${port}/api/docs`);
 }
