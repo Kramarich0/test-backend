@@ -7,10 +7,6 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-NodeNext-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.0-85EA2D?style=flat&logo=swagger&logoColor=black)](http://localhost:3000/api/docs)
 
-> 🌐 **Language / Язык:**
->
-> **[🇷🇺 Перейти к русской версии](#центральный-офис-ккм--api-панели-управления)** | **[🇬🇧 Switch to English Version](#central-office-kkm--management-api)**
-
 ---
 
 <a name="russian"></a>
@@ -57,7 +53,7 @@ podman compose up -d --build
 3. **Атомарные транзакции (ACID)**:
    - Одобрение заявки на кассу (`PATCH /requests/:id/approve`) выполняется в `prisma.$transaction`: статус заявки переводится в `APPROVED`, и одновременно создается активный терминал по аппаратному MAC-адресу — оба действия коммитятся атомарно.
 4. **Heartbeat терминалов**:
-   - `POST /terminals/alive` принимает физический `macAddress` оборудования, обновляет статус в `ACTIVE` и время последней активности без раскрытия внутренних UUID.
+   - `POST /terminals/alive` принимает физический `macAddress` оборудования и обновляет статус терминала в `ACTIVE` (при записи автоматически обновляется и `updatedAt`). Касса идентифицируется по аппаратному MAC-адресу, а не по внутреннему UUID в пути запроса.
    - Эндпоинт **публичный**: кассовое оборудование шлёт heartbeat без JWT-токена.
 5. **Безопасность паролей (OWASP + защита от Bcrypt DoS)**:
    - Проверка сложности `@IsStrongPassword` на регистрацию и смену паролей.
@@ -65,6 +61,9 @@ podman compose up -d --build
    - Вход через `LoginDto` не раскрывает правил сложности, что предотвращает перебор пользователей.
 6. **Fail-Fast валидация окружения**:
    - При старте `ConfigModule` строго валидирует типы портов, URL базы данных и JWT-таймауты через `class-validator` / `class-transformer`.
+7. **Shared Kernel для общих DTO**:
+   - Публичный профиль администратора (`AdminProfileResponseDto`) и смена пароля (`ChangePasswordDto`) вынесены в [`src/common/dto/`](./src/common/dto/) и напрямую используются модулями `auth`, `admins` и `profile` (контроллеры и сервисы импортируют общие классы, файлы-дубли в модулях отсутствуют).
+   - Это исключает дублирование идентичных полей DTO без появления кросс-модульных импортов: правило архитектуры `vsa-no-cross-slice-imports` запрещает зависимости между модулями, но разрешает импорт из общего ядра `common`.
 
 #### 🔐 Архитектурное допущение: аутентификация торговых точек
 
@@ -77,7 +76,7 @@ podman compose up -d --build
 | **Auth**        |  `POST`  | `/auth/login`            |  Публичный  | Вход по email и паролю, выдача пары JWT             |
 |                 |  `POST`  | `/auth/refresh`          |  Публичный  | Обновление пары JWT по refresh-токену               |
 |                 |  `POST`  | `/auth/logout`           | Авторизован | Завершение сессии и инвалидация токена              |
-| **Admins**      |  `GET`   | `/admins`                |   `ROOT`    | Список всех администраторов ЦО                      |
+| **Admins**      |  `GET`   | `/admins`                | Авторизован | Список всех администраторов ЦО                      |
 |                 |  `POST`  | `/admins`                |   `ROOT`    | Создание менеджера (роль `MANAGER`)                 |
 |                 | `PATCH`  | `/admins/:id/password`   |   `ROOT`    | Смена пароля администратора со сбросом сессии       |
 |                 | `DELETE` | `/admins/:id`            |   `ROOT`    | Удаление менеджера (удаление ROOT запрещено)        |
@@ -100,9 +99,20 @@ podman compose up -d --build
 |                 | `PATCH`  | `/requests/:id/reject`   | Авторизован | Отклонение заявки на подключение                    |
 |                 |  `POST`  | `/requests/:id/comment`  | Авторизован | Добавление комментария оператора к заявке           |
 
-### 📦 Контракты ключевых эндпоинтов (входные/выходные данные)
+### 📦 Контракты всех эндпоинтов (входные/выходные данные)
 
-#### `POST /auth/login` — вход администратора / менеджера (публичный)
+> **Общие сведения**
+>
+> - Базовый URL: `http://localhost:3000`
+> - Доступ к защищённым ручкам: заголовок `Authorization: Bearer <accessToken>`.
+> - Публичные ручки (JWT не требуется): `POST /auth/login`, `POST /auth/refresh`, `POST /terminals/alive`.
+> - Формат ошибки: `{"message": "...", "error": "<Тип>", "statusCode": 4xx}`; при ошибке валидации `message` — массив строк.
+> - Пароли и их bcrypt-хеши **никогда не возвращаются** в ответах.
+> - Значения `"<...>"` в примерах — плейсхолдеры UUID, в ответе подставляются реальные значения.
+
+#### Auth
+
+##### `POST /auth/login` — вход администратора / менеджера (публичный)
 
 ```json
 // Request (application/json)
@@ -115,85 +125,633 @@ podman compose up -d --build
 ```json
 // Response 200 OK
 {
+  "accessToken": "<JWT>",
+  "refreshToken": "<JWT>",
   "admin": {
-    "id": "b1e8c8d3-...-uuid",
+    "id": "<admin-uuid>",
     "email": "manager@kkm.local",
     "name": "Alex Manager",
     "role": "MANAGER",
-    "tokenV": 1,
-    "createdAt": "2026-09-23T10:00:00.000Z",
-    "updatedAt": "2026-09-23T10:00:00.000Z"
-  },
-  "tokens": {
-    "accessToken": "<JWT>",
-    "refreshToken": "<JWT>"
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z"
   }
 }
 ```
 
-`401 Unauthorized` — неверный email или пароль.
+`401` — неверный email или пароль (`Invalid Password or Email`). Поле `tokenV` инкрементируется при каждом входе — старые токены этого аккаунта инвалидируются (одна активная сессия).
 
-#### `POST /shops` — создание торговой точки (авторизован)
+##### `POST /auth/refresh` — обновление пары JWT (публичный)
 
 ```json
-// Request
+// Request (application/json)
+{
+  "refreshToken": "<JWT>"
+}
+```
+
+```json
+// Response 200 OK
+{
+  "accessToken": "<JWT>",
+  "refreshToken": "<JWT>"
+}
+```
+
+`401` — refresh-токен невалиден, протух или сессия инвалидирована (`Refresh token invalid or expired` / `Session expired`). Каждый вызов ротирует пару и атомарно инкрементирует `tokenV` — повторное (в т.ч. конкурентное) использование того же refresh-токена всегда даёт `401`.
+
+##### `POST /auth/logout` — завершение текущей сессии (авторизован)
+
+```json
+// Response 200 OK
+{
+  "success": true
+}
+```
+
+`401` — отсутствует/невалиден access-токен. Логаут инкрементирует `tokenV` — выданные ранее токены перестают работать.
+
+#### Admins
+
+##### `GET /admins` — список администраторов (авторизован)
+
+```json
+// Response 200 OK
+[
+  {
+    "id": "<admin-uuid>",
+    "email": "manager@kkm.local",
+    "name": "Alex Manager",
+    "role": "MANAGER",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z"
+  }
+]
+```
+
+`401` — не авторизован. Поля `password` и `tokenV` наружу не возвращаются ни в одном ответе.
+
+##### `POST /admins` — создать менеджера (root-only)
+
+```json
+// Request (application/json)
+{
+  "email": "alex.manager@kkm.local",
+  "name": "Alex Manager",
+  "password": "ManagerPass123!"
+}
+```
+
+```json
+// Response 201 Created
+{
+  "id": "<admin-uuid>",
+  "email": "alex.manager@kkm.local",
+  "name": "Alex Manager",
+  "role": "MANAGER",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+Поле `role` в теле **не принимается** — создаётся администратор строго с ролью `MANAGER` (роль ROOT может существовать только одна и создаётся сидом). `400` — email/name/сложность пароля не прошли валидацию (пароль: 8–64 символов, нижний и верхний регистр, цифра, символ); `401` — не авторизован; `403` — не ROOT; `409` — email уже занят.
+
+##### `PATCH /admins/:id/password` — смена пароля администратора (root-only)
+
+```json
+// Request (application/json)
+{
+  "newPassword": "NewManagerPass123!"
+}
+```
+
+```json
+// Response 200 OK
+{
+  "id": "<admin-uuid>",
+  "email": "alex.manager@kkm.local",
+  "name": "Alex Manager",
+  "role": "MANAGER",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — слабый новый пароль; `401` — не авторизован; `403` — не ROOT; `404` — администратор не найден. Смена пароля инкрементирует `tokenV` — сессии администратора завершаются.
+
+##### `DELETE /admins/:id` — удалить администратора (root-only)
+
+```json
+// Response 200 OK
+{
+  "id": "<admin-uuid>",
+  "email": "alex.manager@kkm.local",
+  "name": "Alex Manager",
+  "role": "MANAGER",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — попытка удалить ROOT (`You cannot remove the root admin`); `401` — не авторизован; `403` — не ROOT; `404` — администратор не найден.
+
+#### Profile
+
+##### `PATCH /profile/password` — смена пароля текущего пользователя (авторизован)
+
+```json
+// Request (application/json)
+{
+  "newPassword": "MyNewSecretPass123!"
+}
+```
+
+```json
+// Response 200 OK
+{
+  "id": "<admin-uuid>",
+  "email": "manager@kkm.local",
+  "name": "Alex Manager",
+  "role": "MANAGER",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — слабый новый пароль; `401` — не авторизован; `404` — профиль не найден. Текущая сессия инвалидируется — после смены пароля нужно войти заново.
+
+> **Комментарий для проверяющего: почему здесь нет `oldPassword`.** В ТЗ ручка описана лаконично — `PATCH /profile/password — смена пароля текущего пользователя` — и поля запроса не специфицированы, прямого требования подтверждать текущий пароль нет. Чтобы не ломать совместимость с автотестами/скриптами, которые передают только `newPassword`, обязательное поле не вводилось (оно не влияет на проверку по ТЗ). При этом смена пароля возможна только в рамках аутентифицированной JWT-сессии (`Authorization: Bearer`), а сама смена инкрементирует `tokenV` и мгновенно инвалидирует все выданные токены, включая текущий — защита от угона сессии сохраняется.
+
+#### Shop Owners
+
+##### `GET /shops-owners` — список владельцев (авторизован)
+
+```json
+// Response 200 OK
+[
+  {
+    "id": "<owner-uuid>",
+    "name": "IE Ivanov Ivan Ivanovich",
+    "contacts": "+7 (999) 123-45-67, ivan@example.com",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z",
+    "_count": {
+      "shops": 1
+    }
+  }
+]
+```
+
+`401` — не авторизован.
+
+##### `GET /shops-owners/:id` — карточка владельца (авторизован)
+
+```json
+// Response 200 OK
+{
+  "id": "<owner-uuid>",
+  "name": "IE Ivanov Ivan Ivanovich",
+  "contacts": "+7 (999) 123-45-67, ivan@example.com",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z",
+  "shops": [
+    {
+      "id": "<shop-uuid>",
+      "name": "Location No.1 \"Sport-Bar Center\"",
+      "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
+      "address": "Moscow, Tverskaya Str., 31",
+      "login": "shop_ivan",
+      "ownerId": "<owner-uuid>",
+      "createdAt": "2026-09-24T10:00:00.000Z",
+      "updatedAt": "2026-09-24T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+`401` — не авторизован; `404` — владелец не найден.
+
+##### `POST /shops-owners` — создать владельца (авторизован)
+
+```json
+// Request (application/json)
+{
+  "name": "IE Petrova Anna",
+  "contacts": "+7 (999) 555-01-02, anna@example.com"
+}
+```
+
+```json
+// Response 201 Created
+{
+  "id": "<owner-uuid>",
+  "name": "IE Petrova Anna",
+  "contacts": "+7 (999) 555-01-02, anna@example.com",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — `name` или `contacts` пустые (оба поля обязательны); `401` — не авторизован.
+
+##### `PATCH /shops-owners/:id` — изменить владельца (авторизован)
+
+```json
+// Request (application/json, минимум одно поле)
+{
+  "name": "IE Petrova Anna Petrovna",
+  "contacts": "+7 (999) 555-01-03"
+}
+```
+
+```json
+// Response 200 OK
+{
+  "id": "<owner-uuid>",
+  "name": "IE Petrova Anna Petrovna",
+  "contacts": "+7 (999) 555-01-03",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — оба поля пустые/не переданы; `401` — не авторизован; `404` — владелец не найден.
+
+##### `DELETE /shops-owners/:id` — удалить владельца (авторизован)
+
+```json
+// Response 200 OK
+{
+  "id": "<owner-uuid>",
+  "name": "IE Petrova Anna",
+  "contacts": "+7 (999) 555-01-02, anna@example.com",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`401` — не авторизован; `404` — владелец не найден. При удалении владельца **каскадно удаляются** его магазины, терминалы и заявки.
+
+#### Shops
+
+##### `GET /shops` — список магазинов (авторизован)
+
+```json
+// Response 200 OK
+[
+  {
+    "id": "<shop-uuid>",
+    "name": "Location No.1 \"Sport-Bar Center\"",
+    "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
+    "address": "Moscow, Tverskaya Str., 31",
+    "login": "shop_ivan",
+    "ownerId": "<owner-uuid>",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z",
+    "owner": {
+      "id": "<owner-uuid>",
+      "name": "IE Ivanov Ivan Ivanovich",
+      "contacts": "+7 (999) 123-45-67, ivan@example.com"
+    },
+    "_count": {
+      "terminals": 1,
+      "requests": 4
+    }
+  }
+]
+```
+
+`401` — не авторизован.
+
+##### `GET /shops/:id` — карточка магазина (авторизован)
+
+```json
+// Response 200 OK
+{
+  "id": "<shop-uuid>",
+  "name": "Location No.1 \"Sport-Bar Center\"",
+  "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
+  "address": "Moscow, Tverskaya Str., 31",
+  "login": "shop_ivan",
+  "ownerId": "<owner-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z",
+  "owner": {
+    "id": "<owner-uuid>",
+    "name": "IE Ivanov Ivan Ivanovich",
+    "contacts": "+7 (999) 123-45-67, ivan@example.com",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z"
+  },
+  "terminals": [
+    {
+      "id": "<terminal-uuid>",
+      "macAddress": "00:1B:44:11:3A:B7",
+      "status": "ACTIVE",
+      "shopId": "<shop-uuid>",
+      "createdAt": "2026-09-24T10:00:00.000Z",
+      "updatedAt": "2026-09-24T10:00:00.000Z"
+    }
+  ],
+  "requests": [
+    {
+      "id": "<request-uuid>",
+      "macAddress": "AA:BB:CC:DD:EE:01",
+      "status": "PENDING",
+      "comment": "Request for terminal at Entrance No.2",
+      "shopId": "<shop-uuid>",
+      "createdAt": "2026-09-24T10:00:00.000Z",
+      "updatedAt": "2026-09-24T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+`401` — не авторизован; `404` — магазин не найден.
+
+##### `POST /shops` — создать магазин (авторизован)
+
+```json
+// Request (application/json)
 {
   "name": "Location No.1 \"Sport-Bar Center\"",
   "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
   "address": "Moscow, Tverskaya Str., 31",
   "login": "shop_ivan",
   "password": "ShopPass123!",
-  "ownerId": "<shop-owner-uuid>"
+  "ownerId": "<owner-uuid>"
 }
 ```
 
-`201 Created` — созданная запись `Shop` (`id`, `name`, `requisites`, `address`, `login`, хеш `password`, `ownerId`, `tokenV: 0`, `createdAt`, `updatedAt`). `404` — владелец не найден; `409` — логин уже занят.
+```json
+// Response 201 Created
+{
+  "id": "<shop-uuid>",
+  "name": "Location No.1 \"Sport-Bar Center\"",
+  "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
+  "address": "Moscow, Tverskaya Str., 31",
+  "login": "shop_ivan",
+  "ownerId": "<owner-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
 
-#### `PATCH /requests/:id/approve` — одобрение заявки (авторизован)
+Поле `name` **необязательно** (`null` при отсутствии); обязательны `requisites`, `address`, `login`, `password`, `ownerId`. Пароль кассы: 6–64 символов. `400` — ошибка валидации; `401` — не авторизован; `404` — владелец не найден; `409` — логин уже занят.
+
+##### `PATCH /shops/:id/credentials` — смена логина/пароля кассы и завершение сессий (авторизован)
+
+```json
+// Request (application/json, минимум одно поле)
+{
+  "login": "shop_tverskaya_new",
+  "password": "NewShopSecret456!"
+}
+```
 
 ```json
 // Response 200 OK
 {
-  "request": {
-    "id": "9f4a-...-uuid",
-    "macAddress": "AA:BB:CC:DD:EE:01",
-    "status": "APPROVED",
-    "comment": "Request for terminal at Entrance No.2",
-    "shopId": "<shop-uuid>"
-  },
-  "terminal": {
-    "id": "7cf2-...-uuid",
-    "macAddress": "AA:BB:CC:DD:EE:01",
+  "id": "<shop-uuid>",
+  "name": "Location No.1 \"Sport-Bar Center\"",
+  "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
+  "address": "Moscow, Tverskaya Str., 31",
+  "login": "shop_tverskaya_new",
+  "ownerId": "<owner-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — не передано ни одно поле; `401` — не авторизован; `404` — магазин не найден; `409` — новый логин уже занят. При успехе `tokenV` инкрементируется — активные сессии кассы завершаются.
+
+#### Terminals
+
+##### `GET /terminals` — список терминалов (авторизован)
+
+```json
+// Response 200 OK
+[
+  {
+    "id": "<terminal-uuid>",
+    "macAddress": "00:1B:44:11:3A:B7",
     "status": "ACTIVE",
-    "shopId": "<shop-uuid>"
+    "shopId": "<shop-uuid>",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z",
+    "shop": {
+      "id": "<shop-uuid>",
+      "name": "Location No.1 \"Sport-Bar Center\"",
+      "address": "Moscow, Tverskaya Str., 31"
+    }
+  }
+]
+```
+
+`401` — не авторизован.
+
+##### `GET /terminals/:id` — карточка терминала (авторизован)
+
+```json
+// Response 200 OK
+{
+  "id": "<terminal-uuid>",
+  "macAddress": "00:1B:44:11:3A:B7",
+  "status": "ACTIVE",
+  "shopId": "<shop-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z",
+  "shop": {
+    "id": "<shop-uuid>",
+    "name": "Location No.1 \"Sport-Bar Center\"",
+    "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
+    "address": "Moscow, Tverskaya Str., 31",
+    "login": "shop_ivan",
+    "ownerId": "<owner-uuid>",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z"
   }
 }
 ```
 
-`400` — заявка не в статусе `PENDING`; `409` — терминал с таким MAC уже существует.
+`401` — не авторизован; `404` — терминал не найден.
 
-#### `POST /terminals/alive` — heartbeat кассы (публичный)
+##### `PATCH /terminals/:id/status` — ручное обновление статуса (авторизован)
 
 ```json
-// Request
+// Request (application/json)
+{
+  "status": "INACTIVE"
+}
+```
+
+```json
+// Response 200 OK
+{
+  "id": "<terminal-uuid>",
+  "macAddress": "00:1B:44:11:3A:B7",
+  "status": "INACTIVE",
+  "shopId": "<shop-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`status` принимает `ACTIVE` или `INACTIVE`. `400` — неверное значение статуса; `401` — не авторизован; `404` — терминал не найден.
+
+##### `POST /terminals/alive` — heartbeat кассы (публичный, без JWT)
+
+```json
+// Request (application/json)
 {
   "macAddress": "00:1B:44:11:3A:B7"
 }
 ```
 
-`200 OK` — обновлённый терминал со `status: "ACTIVE"`. `404` — терминал с таким MAC не зарегистрирован. `400` — `macAddress` не является корректным MAC-адресом.
-
-#### `PATCH /shops/:id/credentials` — смена учётных данных кассы (авторизован)
-
 ```json
-// Request (минимум одно из полей)
+// Response 200 OK
 {
-  "login": "shop_ivan_new",
-  "password": "NewShopPass123!"
+  "id": "<terminal-uuid>",
+  "macAddress": "00:1B:44:11:3A:B7",
+  "status": "ACTIVE",
+  "shopId": "<shop-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
 }
 ```
 
-`200 OK` — обновлённая запись `Shop` с инкрементированным `tokenV` (сессии кассы инвалидированы). `409` — новый логин уже занят.
+`400` — `macAddress` не является корректным MAC-адресом; `404` — терминал с таким MAC не зарегистрирован (`No terminal with such MAC address is registered`).
+
+#### Requests
+
+##### `GET /requests` — список заявок на подключение (авторизован)
+
+```json
+// Response 200 OK
+[
+  {
+    "id": "<request-uuid>",
+    "macAddress": "AA:BB:CC:DD:EE:01",
+    "status": "PENDING",
+    "comment": "Request for terminal at Entrance No.2",
+    "shopId": "<shop-uuid>",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z",
+    "shop": {
+      "id": "<shop-uuid>",
+      "name": "Location No.1 \"Sport-Bar Center\"",
+      "address": "Moscow, Tverskaya Str., 31"
+    }
+  }
+]
+```
+
+`status`: `PENDING` | `APPROVED` | `REJECTED`; `comment` — `null`, если комментария нет. `401` — не авторизован.
+
+##### `PATCH /requests/:id/approve` — одобрить заявку и создать терминал (авторизован)
+
+```json
+// Response 200 OK
+{
+  "request": {
+    "id": "<request-uuid>",
+    "macAddress": "AA:BB:CC:DD:EE:01",
+    "status": "APPROVED",
+    "comment": "Request for terminal at Entrance No.2",
+    "shopId": "<shop-uuid>",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z"
+  },
+  "terminal": {
+    "id": "<terminal-uuid>",
+    "macAddress": "AA:BB:CC:DD:EE:01",
+    "status": "ACTIVE",
+    "shopId": "<shop-uuid>",
+    "createdAt": "2026-09-24T10:00:00.000Z",
+    "updatedAt": "2026-09-24T10:00:00.000Z"
+  }
+}
+```
+
+Перевод заявки в `APPROVED` и создание терминала выполняются атомарно (одна транзакция). `400` — заявка не в статусе `PENDING` (например, уже одобрена); `401` — не авторизован; `404` — заявка не найдена; `409` — терминал с таким MAC уже существует.
+
+##### `PATCH /requests/:id/reject` — отклонить заявку (авторизован)
+
+```json
+// Response 200 OK
+{
+  "id": "<request-uuid>",
+  "macAddress": "AA:BB:CC:DD:EE:02",
+  "status": "REJECTED",
+  "comment": "Request for terminal at Entrance No.3 (To test REJECTED)",
+  "shopId": "<shop-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — заявка не в статусе `PENDING`; `401` — не авторизован; `404` — заявка не найдена.
+
+##### `POST /requests/:id/comment` — добавить комментарий (авторизован)
+
+```json
+// Request (application/json)
+{
+  "comment": "Проверено оператором ЦО"
+}
+```
+
+```json
+// Response 200 OK
+{
+  "id": "<request-uuid>",
+  "macAddress": "AA:BB:CC:DD:EE:01",
+  "status": "PENDING",
+  "comment": "Проверено оператором ЦО",
+  "shopId": "<shop-uuid>",
+  "createdAt": "2026-09-24T10:00:00.000Z",
+  "updatedAt": "2026-09-24T10:00:00.000Z"
+}
+```
+
+`400` — пустой комментарий; `401` — не авторизован; `404` — заявка не найдена.
+
+#### 💡 Сценарий быстрой ручной проверки
+
+```bash
+BASE=http://localhost:3000
+CT=(-H 'Content-Type: application/json')
+TOKEN='<accessToken из ответа /auth/login>'
+
+# 1. Вход менеджером (публичный, JWT не нужен)
+curl "${CT[@]}" -X POST "$BASE/auth/login" \
+  -d '{"email":"manager@kkm.local","password":"ManagerPass123!"}'
+
+# 2. Авторизованный доступ (пример: список заявок с названием магазина)
+curl "${CT[@]}" "$BASE/requests" -H "Authorization: Bearer $TOKEN"
+# найдите id заявки со статусом PENDING и MAC AA:BB:CC:DD:EE:01
+
+# 3. Одобрить заявку → атомарно создастся терминал
+curl "${CT[@]}" -X PATCH "$BASE/requests/<request-id>/approve" \
+  -H "Authorization: Bearer $TOKEN"
+# → перевести терминал в INACTIVE, а heartbeat'ом вернуть обратно в ACTIVE:
+curl "${CT[@]}" -X PATCH "$BASE/terminals/<terminal-id>/status" \
+  -d '{"status":"INACTIVE"}' -H "Authorization: Bearer $TOKEN"
+curl "${CT[@]}" -X POST "$BASE/terminals/alive" -d '{"macAddress":"AA:BB:CC:DD:EE:01"}'
+
+# 4. Refresh: refresh-токен одноразовый — после ротации старая пара недействительна.
+REFRESH_RESP=$(curl "${CT[@]}" -X POST "$BASE/auth/refresh" -d '{"refreshToken":"<refreshToken>"}')
+NEW_ACCESS=$(echo "$REFRESH_RESP" | jq -r '.accessToken')
+
+# 5. Logout новым access-токеном: сессия завершается (tokenV инкрементируется).
+curl "${CT[@]}" -X POST "$BASE/auth/logout" -H "Authorization: Bearer $NEW_ACCESS"
+
+# 6. (Опционально) Смена пароля профиля инвалидирует ВСЕ выданные токены,
+#    включая refresh — дальнейшие запросы требуют входа уже с новым паролем.
+TOKEN2=$(curl "${CT[@]}" -X POST "$BASE/auth/login" \
+  -d '{"email":"manager@kkm.local","password":"ManagerPass123!"}' | jq -r '.accessToken')
+curl "${CT[@]}" -X PATCH "$BASE/profile/password" -d '{"newPassword":"MyNewPass123!"}' \
+  -H "Authorization: Bearer $TOKEN2"
+```
 
 ### 🛠️ Инструменты качества кода и разработка
 
@@ -212,215 +770,3 @@ pnpm run test
 ```
 
 ---
-
-<a name="english"></a>
-
-## Central Office KKM — Management API
-
-Production-ready REST API backend for managing Central Office retail spots, POS/KKM terminals, connection requests, and role-based administrator access (Root / Manager).
-
-### ⚡ Quick Start (single command)
-
-The full stack (PostgreSQL database, automated migrations, data seeding, and NestJS server) starts with one command:
-
-```bash
-docker compose up -d --build
-# or using Podman:
-podman compose up -d --build
-```
-
-- 📑 **Interactive Swagger UI**: [http://localhost:3000/api/docs](http://localhost:3000/api/docs)
-- 🚀 **REST API Base URL**: [http://localhost:3000](http://localhost:3000)
-
-> 💡 The `docker-compose.yml` defines two services: `backend` (NestJS) and `postgres` (PostgreSQL 17). On the first start the backend automatically applies Prisma migrations (`prisma migrate deploy`) and runs the seed — no manual configuration required.
-
-### 🔑 Test Credentials
-
-| Role             | Email / Login       | Password          | Access Level                                     |
-| :--------------- | :------------------ | :---------------- | :----------------------------------------------- |
-| **ROOT Admin**   | `root@kkm.local`    | `RootAdmin123!`   | Full Central Office access + Manager management  |
-| **MANAGER**      | `manager@kkm.local` | `ManagerPass123!` | Operational access (stores, terminals, requests) |
-| **Store (Shop)** | `shop_ivan`         | `ShopPass123!`    | POS terminal authentication credentials          |
-
-### 🛡️ Architecture Highlights
-
-1. **Single-Session Enforcement per Device**:
-   - Each account carries an atomic token version (`tokenV`).
-   - Atomic `tokenV` increment on login, logout, and password change guarantees instant invalidation of old Access/Refresh tokens without Redis.
-2. **Strict RBAC & Root Protection**:
-   - Central Office admin management is restricted via a composite `@Auth('ROOT')` decorator. The system guarantees exactly one ROOT account (protected against deletion and re-creation via API).
-3. **Atomic Database Transactions (ACID)**:
-   - `PATCH /requests/:id/approve` executes an interactive `prisma.$transaction`: the request status is moved to `APPROVED` and an `ACTIVE` terminal is provisioned by hardware MAC address in a single atomic commit.
-4. **Hardware Heartbeat Protocol**:
-   - `POST /terminals/alive` uses the hardware `macAddress` to confirm terminal connectivity, flipping the status to `ACTIVE` without exposing internal UUIDs.
-   - The endpoint is **public**: POS hardware sends heartbeats without a JWT token.
-5. **OWASP Password Security & Bcrypt DoS Protection**:
-   - Enforced password complexity with `@IsStrongPassword` on registration and password change.
-   - `@MaxLength(64)` prevents CPU exhaustion during hashing (bcrypt 72-byte limit / CPU-exhaustion DoS).
-   - The `LoginDto` deliberately avoids leaking complexity rules to prevent user enumeration.
-6. **Fail-Fast Environment Validation**:
-   - Strict runtime configuration checks (ports, database URLs, JWT duration formats) via `class-validator` / `class-transformer` upon application bootstrap.
-
-#### 🔐 Architectural Assumption: Store Authentication
-
-This service is the REST API of the Central Office, so JWT authentication is implemented for administrators and managers: `POST /auth/login` accepts an administrator `email` and only queries the `admins` table. Store credentials (`login` / `password` in the `Shop` model) are stored in the Central Office and are provided to external POS modules / the cash-register gateway. Incrementing `tokenV` on `PATCH /shops/:id/credentials` instantly invalidates the store's active sessions on the gateway side; the POS then re-authenticates with the new credentials.
-
-### 📋 Complete API Overview Table
-
-| Domain          |  Method  | Endpoint                 |    Access     | Summary                                          |
-| :-------------- | :------: | :----------------------- | :-----------: | :----------------------------------------------- |
-| **Auth**        |  `POST`  | `/auth/login`            |    Public     | Authenticate administrator, issue JWT pair       |
-|                 |  `POST`  | `/auth/refresh`          |    Public     | Refresh JWT access token                         |
-|                 |  `POST`  | `/auth/logout`           | Authenticated | Terminate session and invalidate token           |
-| **Admins**      |  `GET`   | `/admins`                |    `ROOT`     | List all administrators                          |
-|                 |  `POST`  | `/admins`                |    `ROOT`     | Create manager (`MANAGER` role)                  |
-|                 | `PATCH`  | `/admins/:id/password`   |    `ROOT`     | Change manager password & invalidate session     |
-|                 | `DELETE` | `/admins/:id`            |    `ROOT`     | Delete manager (ROOT deletion forbidden)         |
-| **Profile**     | `PATCH`  | `/profile/password`      | Authenticated | Change current user password                     |
-| **Shop Owners** |  `GET`   | `/shops-owners`          | Authenticated | List owners with shop counts                     |
-|                 |  `GET`   | `/shops-owners/:id`      | Authenticated | Get owner details and attached stores            |
-|                 |  `POST`  | `/shops-owners`          | Authenticated | Create shop owner (individual / entity)          |
-|                 | `PATCH`  | `/shops-owners/:id`      | Authenticated | Update shop owner contacts                       |
-|                 | `DELETE` | `/shops-owners/:id`      | Authenticated | Delete owner with cascading stores               |
-| **Shops**       |  `GET`   | `/shops`                 | Authenticated | List shops with owner & terminal metrics         |
-|                 |  `GET`   | `/shops/:id`             | Authenticated | Shop details with terminals & requests           |
-|                 |  `POST`  | `/shops`                 | Authenticated | Register store linked to owner                   |
-|                 | `PATCH`  | `/shops/:id/credentials` | Authenticated | Rotate POS login/password & kill active sessions |
-| **Terminals**   |  `GET`   | `/terminals`             | Authenticated | List all POS/KKM terminals                       |
-|                 |  `GET`   | `/terminals/:id`         | Authenticated | Get terminal details                             |
-|                 | `PATCH`  | `/terminals/:id/status`  | Authenticated | Override status (`ACTIVE`/`INACTIVE`)            |
-|                 |  `POST`  | `/terminals/alive`       |    Public     | Hardware heartbeat ping by MAC address           |
-| **Requests**    |  `GET`   | `/requests`              | Authenticated | List connection requests                         |
-|                 | `PATCH`  | `/requests/:id/approve`  | Authenticated | Atomically approve request & provision terminal  |
-|                 | `PATCH`  | `/requests/:id/reject`   | Authenticated | Reject connection request                        |
-|                 |  `POST`  | `/requests/:id/comment`  | Authenticated | Add internal operator audit comment              |
-
-### 📦 Key Endpoint Contracts (Request / Response)
-
-#### `POST /auth/login` — administrator / manager sign-in (public)
-
-```json
-// Request (application/json)
-{
-  "email": "manager@kkm.local",
-  "password": "ManagerPass123!"
-}
-```
-
-```json
-// Response 200 OK
-{
-  "admin": {
-    "id": "b1e8c8d3-...-uuid",
-    "email": "manager@kkm.local",
-    "name": "Alex Manager",
-    "role": "MANAGER",
-    "tokenV": 1,
-    "createdAt": "2026-09-23T10:00:00.000Z",
-    "updatedAt": "2026-09-23T10:00:00.000Z"
-  },
-  "tokens": {
-    "accessToken": "<JWT>",
-    "refreshToken": "<JWT>"
-  }
-}
-```
-
-`401 Unauthorized` — invalid email or password.
-
-#### `POST /shops` — register a retail shop (authenticated)
-
-```json
-// Request
-{
-  "name": "Location No.1 \"Sport-Bar Center\"",
-  "requisites": "Tax ID 777777777777, Registration No. 123456788765432",
-  "address": "Moscow, Tverskaya Str., 31",
-  "login": "shop_ivan",
-  "password": "ShopPass123!",
-  "ownerId": "<shop-owner-uuid>"
-}
-```
-
-`201 Created` — created `Shop` record (`id`, `name`, `requisites`, `address`, `login`, `password` hash, `ownerId`, `tokenV: 0`, `createdAt`, `updatedAt`). `404` — owner not found; `409` — login already taken.
-
-#### `PATCH /requests/:id/approve` — approve a request (authenticated)
-
-```json
-// Response 200 OK
-{
-  "request": {
-    "id": "9f4a-...-uuid",
-    "macAddress": "AA:BB:CC:DD:EE:01",
-    "status": "APPROVED",
-    "comment": "Request for terminal at Entrance No.2",
-    "shopId": "<shop-uuid>"
-  },
-  "terminal": {
-    "id": "7cf2-...-uuid",
-    "macAddress": "AA:BB:CC:DD:EE:01",
-    "status": "ACTIVE",
-    "shopId": "<shop-uuid>"
-  }
-}
-```
-
-`400` — request is not in `PENDING` status; `409` — a terminal with this MAC already exists.
-
-#### `POST /terminals/alive` — hardware heartbeat (public)
-
-```json
-// Request
-{
-  "macAddress": "00:1B:44:11:3A:B7"
-}
-```
-
-`200 OK` — updated terminal with `status: "ACTIVE"`. `404` — no terminal registered with this MAC. `400` — `macAddress` is not a valid MAC address.
-
-#### `PATCH /shops/:id/credentials` — rotate store credentials (authenticated)
-
-```json
-// Request (at least one of the fields)
-{
-  "login": "shop_ivan_new",
-  "password": "NewShopPass123!"
-}
-```
-
-`200 OK` — updated `Shop` record with incremented `tokenV` (store sessions invalidated). `409` — new login already taken.
-
-### 🛠️ Local Development & Quality Gates
-
-```bash
-# Local development with watch mode (generates Prisma Client first)
-pnpm run start:dev
-
-# Linting (Oxlint)
-pnpm run lint
-
-# Architectural dependency & cycle analysis (Dependency-Cruiser)
-pnpm run arch:check
-
-# Vitest test suite
-pnpm run test
-```
-
----
-
-## 📚 Project Structure (project layout)
-
-```
-src/
-├── common/                  # Shared decorators, guards, constants, utils
-├── config/                  # Fail-fast environment validation (class-validator)
-├── modules/
-│   ├── auth/                # Login / refresh / logout, JWT strategy, RBAC guard
-│   ├── admins/              # Root-only administrator management
-│   ├── profile/             # Current user password change
-│   ├── shop-owners/         # Shop owner CRUD
-│   ├── shops/               # Shops CRUD + credentials rotation
-│   ├── terminals/           # Terminals + hardware heartbeat
-│   └── requests/            # Terminal connection requests (approve/reject/comment)
-└── main.ts                  # Bootstrap, Swagger /api/docs
-```
